@@ -5,7 +5,8 @@ entropy in bits, and an overall strength rating.
 """
 
 import math
-import string
+import string 
+from cracktime import estimate_crack_times 
 
 def get_character_pool_size(password: str) -> int:
     """
@@ -76,6 +77,7 @@ def analyze(password: str) -> dict:
         "pool_size": get_character_pool_size(password),
         "entropy": round(entropy, 1),
         "strength": rate_strength(entropy),
+        "crack_times": estimate_crack_times(entropy),
     }
 
 if __name__ == "__main__":
