@@ -1,36 +1,75 @@
-""" 
+"""
 Password Strength Analyzer:
 Analyzes a password and reports its length, character composition,
 entropy in bits, and an overall strength rating.
 """
 
 import math
-import string 
-from cracktime import estimate_crack_times 
+import string
+from .cracktime import estimate_crack_times
+
+# Conservative pool size for non-ASCII / unrecognized characters. An attacker
+# targeting unicode would draw from a much larger space; we cap at a reasonable
+# common-codepoint count to avoid wildly over-rewarding obscure characters.
+_OTHER_POOL_SIZE = 1024
+_PUNCTUATION_SET = set(string.punctuation)
+
+
+def _classify(password: str) -> dict:
+    """Single pass over the password identifying which character classes are present."""
+    classes = {
+        "lowercase": False, "uppercase": False, "digits": False,
+        "symbols": False, "space": False, "other": False,
+    }
+    for c in password:
+        if c.isascii() and c.islower():
+            classes["lowercase"] = True
+        elif c.isascii() and c.isupper():
+            classes["uppercase"] = True
+        elif c.isascii() and c.isdigit():
+            classes["digits"] = True
+        elif c in _PUNCTUATION_SET:
+            classes["symbols"] = True
+        elif c == " ":
+            classes["space"] = True
+        else:
+            classes["other"] = True
+    return classes
+
 
 def get_character_pool_size(password: str) -> int:
     """
     Determines the size of the character pool used in the password.
     For example, if a password contains lowercase letters and digits, the pool size is 26 + 10 = 36.
     """
+    classes = _classify(password)
     pool = 0
-    if any(c in string.ascii_lowercase for c in password):
+    if classes["lowercase"]:
         pool += 26
-    if any(c in string.ascii_uppercase for c in password):
+    if classes["uppercase"]:
         pool += 26
-    if any(c in string.digits for c in password):
+    if classes["digits"]:
         pool += 10
-    if any(c in string.punctuation for c in password):
+    if classes["symbols"]:
         pool += len(string.punctuation)
+    if classes["space"]:
+        pool += 1
+    if classes["other"]:
+        pool += _OTHER_POOL_SIZE
     return pool
 
 
 def calculate_entropy(password: str) -> float:
     """
-    Calculates the entropy of a password in bits using the formula:
-    H = L * log2(R)
+    Calculates the entropy of a password in bits using H = L * log2(R),
     where L is the length and R is the character pool size.
+
+    NOTE: This assumes characters are chosen uniformly at random from the pool.
+    It does not account for dictionary words, common substitutions, repeated
+    patterns, or keyboard walks, so this is an UPPER BOUND on real strength.
     """
+    if not password:
+        return 0.0
     pool_size = get_character_pool_size(password)
     if pool_size == 0:
         return 0.0
@@ -40,30 +79,25 @@ def calculate_entropy(password: str) -> float:
 def rate_strength(entropy: float) -> str:
     """
     Maps an entropy value (in bits) to a human-readable strength rating.
+    Thresholds reflect modern offline-attack capabilities: <60 bits is breakable
+    in hours by a GPU rig against fast hashes.
     """
-    if entropy < 40:
+    if entropy < 60:
         return "Weak"
-    elif entropy < 60:
+    if entropy < 80:
         return "Fair"
-    elif entropy < 80:
+    if entropy < 100:
         return "Strong"
-    else:
-        return "Very Strong"
-    
-def describe_charset (password: str) -> str:
+    return "Very Strong"
+
+
+def describe_charset(password: str) -> str:
     """
     Returns a human-readable description of the character types present in the password.
     """
-    types = []
-    if any(c in string.ascii_lowercase for c in password):
-        types.append("lowercase")
-    if any(c in string.ascii_uppercase for c in password):
-        types.append("uppercase")
-    if any(c in string.digits for c in password):
-        types.append("digits")
-    if any(c in string.punctuation for c in password):
-        types.append("symbols")
-    return ", ".join(types) if types else "none"
+    classes = _classify(password)
+    present = [name for name, found in classes.items() if found]
+    return ", ".join(present) if present else "none"
 
 
 def analyze(password: str) -> dict:
