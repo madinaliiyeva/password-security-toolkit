@@ -34,6 +34,14 @@ def main() -> int:
     print("Crack times:")
     for scenario, time_str in result["crack_times"].items():
         print(f"  {scenario:22s}: {time_str}")
+
+    breach_count = result.get("breach_count")
+    if breach_count is None:
+        print("Breach check: lookup failed (network error)")
+    elif breach_count == 0:
+        print("Breach check: not found in known breaches")
+    else:
+        print(f"Breach check: seen {breach_count:,} times in known breaches")
     return 0
 
 

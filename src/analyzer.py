@@ -7,6 +7,7 @@ entropy in bits, and an overall strength rating.
 import math
 import string
 from .cracktime import estimate_crack_times
+from .hibp import check_pwned
 
 # Conservative pool size for non-ASCII / unrecognized characters. An attacker
 # targeting unicode would draw from a much larger space; we cap at a reasonable
@@ -100,12 +101,15 @@ def describe_charset(password: str) -> str:
     return ", ".join(present) if present else "none"
 
 
-def analyze(password: str) -> dict:
+def analyze(password: str, check_breach: bool = True) -> dict:
     """
-    Performs a full analysis of a password and returns the results as a dictionary
+    Performs a full analysis of a password and returns the results as a dictionary.
+
+    When check_breach is True, queries HaveIBeenPwned via k-anonymity and
+    includes a "breach_count" key (int, or None if the lookup failed).
     """
     entropy = calculate_entropy(password)
-    return {
+    result = {
         "length": len(password),
         "charset": describe_charset(password),
         "pool_size": get_character_pool_size(password),
@@ -113,6 +117,9 @@ def analyze(password: str) -> dict:
         "strength": rate_strength(entropy),
         "crack_times": estimate_crack_times(entropy),
     }
+    if check_breach:
+        result["breach_count"] = check_pwned(password)
+    return result
 
 if __name__ == "__main__":
     test_passwords = ["password", "P@ssw0rd", "Tr0ub4dor&3", "correct horse battery staple"]
